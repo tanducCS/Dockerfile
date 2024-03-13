@@ -13,12 +13,14 @@
 - [Ruby](#dockerfile-for-ruby-on-rails)
 - [Rust](#dockerfile-for-rust)
 - [PHP Laravel](#dockerfile-for-php-laravel)
+- [Dart](#dockerfile-for-dart)
+- [R Studio](#dockerfile-for-r-studio) 
 - [Contact](#contact)
 
 ## Dockerfile for React
 Normal:
 
-```
+```Dockerfile
 FROM node:20-alpine as build
 
 WORKDIR /app
@@ -36,7 +38,7 @@ CMD ["nginx", "-g", "daemon off;"]
 
 With pnpm:
 
-```
+```Dockerfile
 FROM node:20-alpine as build
 
 RUN npm install -g pnpm
@@ -122,7 +124,7 @@ http {
 
 ## Dockerfile for NodeJS
 ExpressJS:
-```
+```Dockerfile
 FROM node:20-alpine
 
 WORKDIR /app
@@ -134,8 +136,50 @@ COPY . .
 CMD ["node", "index.js"]
 ```
 
-NestJS Framework:
+Install node-gyp on Node Alpine version:
+```Dockerfile
+FROM node:20-alpine
+
+RUN apk add --no-cache \
+    make \
+    gcc \
+    g++ \
+    python3 \
+    pkgconfig \
+    pixman-dev \
+    cairo-dev \
+    pango-dev \
+    libjpeg-turbo-dev \
+    giflib-dev
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+COPY . .
+
+CMD ["node", "index.js"]
 ```
+
+If you try to use the sharp package with NodeJS but encounter errors:
++ `Could not load the "sharp" module using the linuxmusl-x64 runtime`
++ `sharp: Installation error: Invalid Version: 1.2.4_git20230717`
+
+Fix by changing `FROM node:20-alpine` to `FROM node:20-buster-slim`:
+```Dockerfile
+FROM node:20-buster-slim
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
+COPY . .
+
+CMD ["node", "index.js"]
+```
+
+NestJS Framework:
+```Dockerfile
 FROM node:20-alpine as build
 
 WORKDIR /app
@@ -164,7 +208,7 @@ CMD ["node", "dist/main.js"]
 
 ## Dockerfile for Python
 Normal:
-```
+```Dockerfile
 FROM python:3.9-slim-bullseye
 
 WORKDIR /app
@@ -180,7 +224,7 @@ CMD ["python3", "app.py"]
 With Flask or Django, you need to run on host `0.0.0.0`.
 
 Flask:
-```
+```Dockerfile
 FROM python:3.9-slim-bullseye
 
 WORKDIR /app
@@ -194,7 +238,7 @@ CMD [ "python3", "-m" , "flask", "run", "--host=0.0.0.0"]
 ```
 
 Django:
-```
+```Dockerfile
 FROM python:3.9-slim-bullseye
 
 WORKDIR /app
@@ -207,10 +251,32 @@ COPY . .
 CMD ["python3", "manage.py", "runserver", "0.0.0.0:8000"]
 ```
 
+With Poetry, python package management like npm in Node:
++ `pyproject.toml` similar to `package.json` in Node
++ `poetry.lock` similar to `package-lock.json` in Node
+
+```Dockerfile
+FROM python:3.9-slim-bullseye as builder
+RUN pip install poetry
+
+WORKDIR /app
+COPY poetry.lock pyproject.toml ./
+RUN poetry install
+
+FROM python:3.9-slim-bullseye as base
+WORKDIR /app
+
+COPY --from=builder /app /app
+
+ENV PATH="/app/.venv/bin:$PATH"
+CMD ["python", "-m", "app.py"]
+```
+
+
 ## Dockerfile for Golang
 Normal:
 
-```
+```Dockerfile
 FROM golang:1.20-alpine AS build
 
 WORKDIR /build
@@ -230,7 +296,7 @@ CMD ["/app/run"]
 
 With private repo:
 
-```
+```Dockerfile
 FROM golang:1.20-alpine AS build
 
 # Install git and openssh
@@ -254,7 +320,7 @@ CMD ["/app/run"]
 
 ## Dockerfile for Java Spring Boot
 
-```
+```Dockerfile
 FROM eclipse-temurin:17-jdk-focal as build
  
 WORKDIR /build
@@ -274,7 +340,7 @@ ENTRYPOINT ["java", "-jar", "/app/run.jar"]
 
 ## Dockerfile for Java Quarkus
 
-```
+```Dockerfile
 FROM maven:3.8.4-openjdk-17 AS build
 
 WORKDIR /build
@@ -304,8 +370,6 @@ RUN microdnf install curl ca-certificates wget ${JAVA_PACKAGE} \
   && chown 1001 /deployments/run-java.sh \
   && chmod 540 /deployments/run-java.sh \
   && echo "securerandom.source=file:/dev/urandom" >> /etc/alternatives/jre/conf/security/java.security
-RUN mkdir /javaagent && \
-  wget -O /javaagent/elastic-apm-agent-1.30.0.jar https://search.maven.org/remotecontent?filepath=co/elastic/apm/elastic-apm-agent/1.30.0/elastic-apm-agent-1.30.0.jar
 
 # We make four distinct layers so if there are application changes the library layers can be re-used
 COPY --from=build /build/target/quarkus-app/lib/ /deployments/lib/
@@ -320,7 +384,7 @@ ENTRYPOINT [ "/deployments/run-java.sh" ]
 
 ## Dockerfile for ASP.NET Core
 Normal:
-```
+```Dockerfile
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 
 WORKDIR /build
@@ -343,7 +407,7 @@ ENTRYPOINT ["./aspnetapp"]
 ```
 
 Alpine version:
-```
+```Dockerfile
 FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
 
 WORKDIR /build
@@ -366,7 +430,7 @@ ENTRYPOINT ["./aspnetapp"]
 ```
 ## Dockerfile for Ruby on Rails
 Without assets:
-```
+```Dockerfile
 FROM ruby:3.2-slim-bullseye
 
 # Install system dependencies required both at runtime and build time
@@ -388,7 +452,7 @@ CMD ["rails", "server", "-b", "0.0.0.0"]
 ```
 
 With assets:
-```
+```Dockerfile
 FROM ruby:3.2-slim-bullseye
 
 # Install system dependencies required both at runtime and build time
@@ -426,7 +490,7 @@ docker build . -t rubyonrails-app --platform=linux/amd64
 ## Dockerfile for Rust
 Normal:
 
-```
+```Dockerfile
 FROM rust:1.70.0-slim-bullseye AS build
 
 # View app name in Cargo.toml
@@ -451,7 +515,7 @@ CMD ["/bin/server"]
 
 With non-privileged user:
 
-```
+```Dockerfile
 FROM rust:1.70.0-slim-bullseye AS build
 
 # View app name in Cargo.toml
@@ -488,7 +552,7 @@ CMD ["/bin/server"]
 ## Dockerfile for PHP Laravel
 Normal:
 
-```
+```Dockerfile
 FROM php:8.2-fpm
 
 ARG user
@@ -603,6 +667,87 @@ COPY ./openssl.cnf /etc/ssl/openssl.cnf
 # If you need add extension
 COPY ./php.ini /usr/local/etc/php/php.ini
 ...
+```
+
+## Dockerfile for Dart
+```Dockerfile
+FROM dart AS build
+
+WORKDIR /build
+
+COPY pubspec.* /build
+RUN dart pub get --no-precompile
+
+COPY . .
+RUN dart compile exe app.dart -o run
+
+FROM debian:bullseye-slim
+
+WORKDIR /build
+
+COPY --from=build /build/run /app/run
+CMD ["/app/run"]
+```
+
+## Dockerfile for R Studio
+SQL Server driver:
+```Dockerfile
+FROM rocker/rstudio
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    apt-transport-https \
+    tdsodbc \
+    libsqliteodbc \
+    gnupg \
+    unixodbc \
+    unixodbc-dev \
+    ## clean up
+    && apt-get clean \ 
+    && rm -rf /var/lib/apt/lists/ \ 
+    && rm -rf /tmp/downloaded_packages/ /tmp/*.rds
+
+RUN curl https://packages.microsoft.com/keys/microsoft.asc | apt-key add - \
+ && curl https://packages.microsoft.com/config/debian/9/prod.list > /etc/apt/sources.list.d/mssql-release.list \
+ && apt-get update \
+ && ACCEPT_EULA=Y apt-get install --yes --no-install-recommends msodbcsql17 msodbcsql18 mssql-tools18 \
+ && install2.r odbc \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/* \
+ && rm -rf /tmp/*
+
+RUN Rscript -e 'install.packages(c("DBI","odbc"))'
+```
+
+MYSQL driver:
+```Dockerfile
+FROM rocker/rstudio
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    apt-transport-https \
+    tdsodbc \
+    libsqliteodbc \
+    gnupg \
+    unixodbc \
+    unixodbc-dev \
+    ## clean up
+    && apt-get clean \ 
+    && rm -rf /var/lib/apt/lists/ \ 
+    && rm -rf /tmp/downloaded_packages/ /tmp/*.rds
+
+RUN wget https://downloads.mysql.com/archives/get/p/10/file/mysql-connector-odbc-8.0.19-linux-debian9-x86-64bit.tar.gz \
+ && tar xvf mysql-connector-odbc-8.0.19-linux-debian9-x86-64bit.tar.gz \
+ && cp mysql-connector-odbc-8.0.19-linux-debian9-x86-64bit/bin/* /usr/local/bin \
+ && cp mysql-connector-odbc-8.0.19-linux-debian9-x86-64bit/lib/* /usr/local/lib \
+ && sudo apt-get update \
+ && apt-get install --yes libodbc1 odbcinst1debian2 \
+ && chmod 777 /usr/local/lib/libmy*
+
+RUN myodbc-installer -a -d -n "MySQL ODBC 8.0 Driver" -t "Driver=/usr/local/lib/libmyodbc8w.so" \
+ && myodbc-installer -a -d -n "MySQL ODBC 8.0" -t "Driver=/usr/local/lib/libmyodbc8a.so"
+
+RUN Rscript -e 'install.packages(c("DBI","odbc"))'
 ```
 
 ## Contact
